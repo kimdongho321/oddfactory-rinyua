@@ -1,0 +1,13 @@
+<accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
+ android:accessibilityEventTypes="@integer/display_none"
+ android:accessibilityFeedbackType="feedbackGeneric"
+ android:accessibilityFlags="@integer/display_none"
+ android:notificationTimeout="0"
+ android:canRetrieveWindowContent="false"
+ android:canPerformGestures="false"
+ android:canRequestTouchExplorationMode="false"
+ android:canRequestFilterKeyEvents="false"
+ android:canTakeScreenshot="false"
+ android:isAccessibilityTool="false"
+ android:settingsActivity="com.oddfactory.renewatheater.MainActivity"
+ android:description="@string/display_description"/>

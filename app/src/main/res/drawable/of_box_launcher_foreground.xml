@@ -1,0 +1,2 @@
+<?xml version="1.0" encoding="utf-8"?>
+<inset xmlns:android="http://schemas.android.com/apk/res/android" android:insetLeft="7.5%" android:insetTop="7.5%" android:insetRight="7.5%" android:insetBottom="7.5%"><bitmap android:src="@drawable/of_box_launcher_pixels" android:gravity="fill" android:filter="false" android:antialias="false" /></inset>

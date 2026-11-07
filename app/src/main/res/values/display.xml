@@ -1,0 +1,4 @@
+<resources>
+ <integer name="display_none">0</integer>
+ <string name="display_description">리뉴아 그림과 몸 안쪽 조작 영역을 표시해요. 화면 내용 읽기, 터치 탐색, 제스처 대신 실행은 사용하지 않아요. 앱에서 실행한 동안만 표시하며 종료하면 창과 작업을 정리해요.</string>
+</resources>
