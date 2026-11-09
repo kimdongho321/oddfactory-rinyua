@@ -25,7 +25,7 @@ final class AppCard extends View {
  }
 }
 
-/** Draws the three launch effects separately from character art. */
+/** Exactly the three selected launch effects. Character art is drawn separately. */
 final class EffectView extends View {
  final TheaterService host;final TheaterApps.App app;final String effect;final Bitmap icon;
  final Paint p=new Paint(Paint.ANTI_ALIAS_FLAG);

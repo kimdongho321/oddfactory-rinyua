@@ -2,7 +2,7 @@ package com.oddfactory.renewatheater;
 
 import java.util.*;
 
-/** Selects animation frames and runs the 1900 ms launch sequence. */
+/** The same approved frame order, anchors and1900ms launch paths as the viewer. */
 final class MotionPlayer {
  final ArtStore art; final Random random=new Random();
  ArtStore.Clip clip;long started=0;String idleKind="neutral",effect="film";boolean launching=false,closing=false;

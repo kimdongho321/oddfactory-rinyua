@@ -23,9 +23,10 @@ import java.util.function.Consumer;
 import javax.net.ssl.HttpsURLConnection;
 
 public final class UpdateCheck {
+    private static final String REPOSITORY = "oddfactory-rinyua";
     private static final String FEED =
-            "https://drive.google.com/uc?export=download&id=1-HgFR-PJqhYTYb7BEZlYJ3vfdrjWmGAi";
-    private static final int MAX_BYTES = 16 * 1024;
+            "https://api.github.com/repos/kimdongho321/" + REPOSITORY + "/releases/latest";
+    private static final int MAX_BYTES = 128 * 1024;
     private static final int TIMEOUT_MS = 6000;
     private static final long AUTO_INTERVAL_MS = 2 * 60_000L;
 
@@ -76,7 +77,7 @@ public final class UpdateCheck {
                 android.content.pm.PackageInfo info = activity.getPackageManager()
                         .getPackageInfo(packageName, 0);
                 long installed = Build.VERSION.SDK_INT >= 28 ? info.getLongVersionCode() : info.versionCode;
-                release = select(readFeed(), packageName, installed);
+                release = select(readFeed(), installed);
             } catch (Exception e) {
                 failed = true;
             }
@@ -109,8 +110,8 @@ public final class UpdateCheck {
         }
         dialog = new AlertDialog.Builder(activity)
                 .setTitle("새 버전이 있어요")
-                .setMessage(release.versionName + " 버전을 Google 드라이브에서 받을 수 있어요.")
-                .setPositiveButton("다운로드", (d, w) -> openDrive(release))
+                .setMessage(release.versionName + " 버전을 GitHub에서 받을 수 있어요.")
+                .setPositiveButton("다운로드", (d, w) -> openDownload(release))
                 .setNegativeButton("나중에", null)
                 .create();
         dialog.setOnDismissListener(d -> dialog = null);
@@ -118,13 +119,9 @@ public final class UpdateCheck {
         applyFont.accept(dialog.getWindow().getDecorView());
     }
 
-    private void openDrive(Release release) {
-        Uri.Builder uri = new Uri.Builder().scheme("https").authority("drive.google.com")
-                .appendPath("uc").appendQueryParameter("export", "download")
-                .appendQueryParameter("id", release.fileId);
-        if (!release.resourceKey.isEmpty()) uri.appendQueryParameter("resourcekey", release.resourceKey);
+    private void openDownload(Release release) {
         try {
-            activity.startActivity(new Intent(Intent.ACTION_VIEW, uri.build()));
+            activity.startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(release.downloadUrl)));
         } catch (ActivityNotFoundException e) {
             toast("다운로드 링크를 열 앱이 없어요.");
         }
@@ -134,26 +131,33 @@ public final class UpdateCheck {
         Toast.makeText(activity, message, Toast.LENGTH_SHORT).show();
     }
 
-    static Release select(String json, String packageName, long installed) throws JSONException {
+    static Release select(String json, long installed) throws JSONException {
         JSONObject feed = new JSONObject(json);
-        if (feed.getInt("schema") != 1) throw new JSONException("Unsupported update list");
-        JSONObject apps = feed.getJSONObject("apps");
-        if (!apps.has(packageName)) throw new JSONException("Missing app");
-        JSONObject app = apps.getJSONObject(packageName);
-        int versionCode = app.getInt("versionCode");
-        if (versionCode <= 0) throw new JSONException("Invalid version code");
-        if (versionCode <= installed) return null;
-        String version = app.getString("versionName");
-        String fileId = app.getString("fileId");
-        String resourceKey = app.optString("resourceKey", "");
-        int minSdk = app.getInt("minSdk");
-        if (!version.matches("[0-9A-Za-z][0-9A-Za-z.+-]{0,39}")
-                || !fileId.matches("[A-Za-z0-9_-]{12,150}")
-                || !resourceKey.matches("[A-Za-z0-9_-]{0,150}")
-                || minSdk < 26 || minSdk > 100) {
-            throw new JSONException("Invalid update listing");
+        if (feed.getBoolean("draft") || feed.getBoolean("prerelease")) return null;
+        String tag = feed.getString("tag_name");
+        if (!tag.matches("v[0-9]+[.][0-9]+[.][0-9]+")) {
+            throw new JSONException("Invalid release tag");
         }
-        return new Release(version, fileId, resourceKey, minSdk);
+        org.json.JSONArray assets = feed.getJSONArray("assets");
+        java.util.regex.Pattern apkName = java.util.regex.Pattern.compile(
+                REPOSITORY + "-vc([1-9][0-9]{0,8})-sdk([1-9][0-9]?)\\.apk");
+        Release release = null;
+        for (int i = 0; i < assets.length(); i++) {
+            JSONObject asset = assets.getJSONObject(i);
+            String name = asset.getString("name");
+            java.util.regex.Matcher match = apkName.matcher(name);
+            if (!match.matches()) continue;
+            if (release != null) throw new JSONException("Ambiguous release APK");
+            String url = "https://github.com/kimdongho321/" + REPOSITORY
+                    + "/releases/download/" + tag + "/" + name;
+            if (!url.equals(asset.getString("browser_download_url"))
+                    || !"uploaded".equals(asset.getString("state"))) {
+                throw new JSONException("Invalid release APK");
+            }
+            release = new Release(tag.substring(1), url,
+                    Integer.parseInt(match.group(1)), Integer.parseInt(match.group(2)));
+        }
+        return release != null && release.versionCode > installed ? release : null;
     }
 
     private static String readFeed() throws IOException {
@@ -162,9 +166,9 @@ public final class UpdateCheck {
         for (int hop = 0; hop < 4; hop++) {
             String host = url.getHost();
             if (!"https".equals(url.getProtocol())
-                    || !("drive.google.com".equals(host) || "drive.usercontent.google.com".equals(host))
+                    || !"api.github.com".equals(host)
                     || url.getUserInfo() != null || (url.getPort() != -1 && url.getPort() != 443)) {
-                throw new IOException("Unexpected Drive redirect");
+                throw new IOException("Unexpected GitHub redirect");
             }
             HttpsURLConnection connection = (HttpsURLConnection) url.openConnection();
             try {
@@ -172,11 +176,13 @@ public final class UpdateCheck {
                 connection.setConnectTimeout(remaining(deadline));
                 connection.setReadTimeout(remaining(deadline));
                 connection.setUseCaches(false);
+                connection.setRequestProperty("Accept", "application/vnd.github+json");
+                connection.setRequestProperty("User-Agent", "ODD-FACTORY-Android");
                 connection.setRequestProperty("Cache-Control", "no-cache");
                 int status = connection.getResponseCode();
                 if (status >= 300 && status < 400) {
                     String location = connection.getHeaderField("Location");
-                    if (location == null) throw new IOException("Missing Drive redirect");
+                    if (location == null) throw new IOException("Missing GitHub redirect");
                     url = new URL(url, location);
                     continue;
                 }
@@ -210,14 +216,14 @@ public final class UpdateCheck {
 
     static final class Release {
         final String versionName;
-        final String fileId;
-        final String resourceKey;
+        final String downloadUrl;
+        final int versionCode;
         final int minSdk;
 
-        Release(String versionName, String fileId, String resourceKey, int minSdk) {
+        Release(String versionName, String downloadUrl, int versionCode, int minSdk) {
             this.versionName = versionName;
-            this.fileId = fileId;
-            this.resourceKey = resourceKey;
+            this.downloadUrl = downloadUrl;
+            this.versionCode = versionCode;
             this.minSdk = minSdk;
         }
     }

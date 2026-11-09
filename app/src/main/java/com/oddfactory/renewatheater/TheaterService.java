@@ -7,6 +7,7 @@ import android.content.pm.*;
 import android.content.res.Configuration;
 import android.graphics.*;
 import android.os.*;
+import android.util.Log;
 import android.view.*;
 import android.widget.*;
 import java.util.*;
@@ -41,7 +42,7 @@ public final class TheaterService extends Service {
   if(Build.VERSION.SDK_INT>=33)registerReceiver(screen,screenEvents,Context.RECEIVER_NOT_EXPORTED);else registerReceiver(screen,screenEvents);receiverRegistered=true;
   targets=new OpaqueTouchTargets(display,this,new OpaqueTouchTargets.Callback(){public void single(){if(!attached)return;if(launching)cancelLaunch();else openPicker();}public void twice(){if(attached)openMenu();}public void dragStart(float x,float y){if(!attached)return;cancelLaunch();downX=x;downY=y;originX=boothLayout.x;originY=boothLayout.y;dragBounds=safe();dragged=true;}public void dragMove(float x,float y){if(!attached||!dragged)return;Rect b=safe();boothLayout.x=OverlayGeometry.clamp(originX+Math.round(x-downX),b.left,b.right,boothLayout.width);boothLayout.y=OverlayGeometry.clamp(originY+Math.round(y-downY),b.top,b.bottom,boothLayout.height);display.update(TheaterService.this,scene,boothLayout);scheduleTargets(player.current(SystemClock.uptimeMillis()),player.shutter(SystemClock.uptimeMillis()));}public void dragEnd(float x,float y,boolean cancel){if(dragged&&!destroyed)savePosition(cancel&&dragBounds!=null?dragBounds:safe());dragged=false;dragBounds=null;}});
   worker.execute(()->{try{ArtStore a=ArtStore.get(this);a.warm();main.post(()->{if(destroyed)return;art=a;player=new MotionPlayer(a);scene=new SceneView(this);scene.setContentDescription("리뉴아 매표소");loaded=true;reload();main.post(poll);});}
-   catch(Exception e){main.post(()->{Toast.makeText(this,"그림을 준비하지 못했어요.",Toast.LENGTH_LONG).show();stopSelf();});}});
+   catch(Exception e){Log.e("RenewaTheater","asset load",e);main.post(()->{Toast.makeText(this,"그림을 준비하지 못했어요.",Toast.LENGTH_LONG).show();stopSelf();});}});
  }
  @Override public int onStartCommand(Intent i,int flags,int id){
   if(i!=null&&"STOP".equals(i.getAction()))requestStop();
@@ -70,8 +71,8 @@ public final class TheaterService extends Service {
  }
  void updateVisibility(){if(!loaded||destroyed)return;if(!display.allows(this)){displayLost(display);return;}if(closing){if(!screenReady())finishStop();return;}readForeground();boolean show=shouldShow();
   if(show&&!attached){try{display.attach(this,scene,boothLayout);attached=true;scene.invalidate();}
-   catch(RuntimeException e){stopSelf();}}
-  if(!show&&attached){targets.invalidateMask();cancelLaunch();removePanel();display.remove(this,scene);attached=false;lastTargetFrame=-1;}
+   catch(RuntimeException e){Log.e("RenewaTheater","overlay",e);stopSelf();}}
+  if(!show&&attached){targets.invalidateMask();cancelLaunch();removePanel();display.remove(this,scene);attached=false;lastTargetFrame=-1;Log.i("RenewaTheater","HIDE");}
   if(show&&attached)targets.setVisible(true);
  }
  final Runnable poll=new Runnable(){public void run(){if(destroyed)return;updateVisibility();if(destroyed)return;if(attached&&scene!=null)scene.invalidate();main.postDelayed(this,attached?650:1100);}};
@@ -94,7 +95,7 @@ public final class TheaterService extends Service {
   ScrollView scroll=new ScrollView(display);LinearLayout rows=new LinearLayout(display);rows.setOrientation(LinearLayout.VERTICAL);scroll.addView(rows);box.addView(scroll,new LinearLayout.LayoutParams(-1,0,1));
   for(TheaterApps.App app:apps){AppCard card=new AppCard(display,app);rows.addView(card,new LinearLayout.LayoutParams(-1,dp(70)));card.setContentDescription(app.name+" 실행");card.setOnClickListener(v->selectApp(app));}
   if(apps.isEmpty()){TextView empty=new TextView(display);empty.setText("설정에서 앱을 골라 주세요.");empty.setTextColor(0xff39282e);rows.addView(empty);}
-  showPanel(box,dp(226),dp(Math.min(330,56+Math.max(1,apps.size())*70)));
+  showPanel(box,dp(226),dp(Math.min(330,56+Math.max(1,apps.size())*70)));Log.i("RenewaTheater","PICKER apps="+apps.size());
  }
  void openSettings(){cancelLaunch();removePanel();startActivity(new Intent(this,MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));}
  void selectApp(TheaterApps.App app){if(launching||!attached)return;long now=SystemClock.uptimeMillis();pendingApp=app;player.beginLaunch(now);launching=true;launchAt=now;
@@ -102,11 +103,11 @@ public final class TheaterService extends Service {
   launchTask=()->{readForeground();if(!launching||!attached||!TheaterApps.selected(this).contains(app.pkg)||!shouldShow()){cancelLaunch();return;}
    Intent intent=getPackageManager().getLaunchIntentForPackage(app.pkg);if(intent==null){Toast.makeText(this,"이 앱을 실행할 수 없어요.",Toast.LENGTH_SHORT).show();cancelLaunch();return;}
    try{intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);startActivity(intent);}
-   catch(RuntimeException e){Toast.makeText(this,"앱 실행을 다시 눌러 주세요.",Toast.LENGTH_LONG).show();}
+   catch(RuntimeException e){Log.e("RenewaTheater","App launch failed");Toast.makeText(this,"앱 실행을 다시 눌러 주세요.",Toast.LENGTH_LONG).show();}
    launching=false;player.finish(SystemClock.uptimeMillis());removePanel();scene.invalidate();main.postDelayed(this::updateVisibility,180);
   };main.postAtTime(launchTask,now+1900);
  }
- void cancelLaunch(){if(launchTask!=null){main.removeCallbacks(launchTask);launchTask=null;}if(launching){launching=false;if(player!=null)player.launching=false;}removePanel();if(scene!=null)scene.invalidate();}
+ void cancelLaunch(){if(launchTask!=null){main.removeCallbacks(launchTask);launchTask=null;}if(launching){Log.i("RenewaTheater","LAUNCH_CANCEL");launching=false;if(player!=null)player.launching=false;}removePanel();if(scene!=null)scene.invalidate();}
  void displayLost(DisplayAccessService host){if(display!=host)return;cleanup();stopSelf();}
  void requestStop(){requestStop(false);}
  void requestStop(boolean fromSettings){
