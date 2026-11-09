@@ -24,6 +24,7 @@ public final class TheaterService extends Service {
  boolean loaded=false,attached=false,launching=false,destroyed=false,homeOnly=true,closing=false,closedFrameDrawn=false;
  final Runnable closeEnd=this::finishStop;
  String foreground="",homePackage="com.sec.android.app.launcher";long lastUsageRead=0,lastForegroundEvent=0;
+ final Map<String,String> resumed=new HashMap<>();   // 지금 화면에 떠 있는 액티비티(패키지/클래스 → 패키지)
  TheaterApps.App pendingApp;Runnable launchTask;
  long launchAt;float downX,downY;int originX,originY;boolean dragged;
  Rect dragBounds;
@@ -63,10 +64,14 @@ public final class TheaterService extends Service {
  @Override public void onConfigurationChanged(Configuration c){super.onConfigurationChanged(c);if(closing){finishStop();return;}if(targets!=null)targets.setVisible(false);dragged=false;if(launching)cancelLaunch();reload();}
  boolean screenReady(){return getSystemService(PowerManager.class).isInteractive()&&!getSystemService(KeyguardManager.class).isKeyguardLocked();}
  boolean shouldShow(){if(!screenReady())return false;
-  return !homeOnly||(MainActivity.usageAllowed(this)&&homePackage.equals(foreground));}
+  return !homeOnly||(MainActivity.usageAllowed(this)&&homeAlone());}
+ /** 홈 런처 하나만 화면에 떠 있을 때만 true. 분할 화면·팝업·최근 앱에서 앱으로 돌아온 경우는 false(이슈 #1). */
+ boolean homeAlone(){if(resumed.isEmpty())return homePackage.equals(foreground);for(String pkg:resumed.values())if(!homePackage.equals(pkg))return false;return true;}
  void readForeground(){if(!MainActivity.usageAllowed(this))return;long now=System.currentTimeMillis();UsageStatsManager manager=getSystemService(UsageStatsManager.class);
   UsageEvents events=manager.queryEvents(Math.max(now-60000,lastUsageRead-500),now);UsageEvents.Event event=new UsageEvents.Event();
-  if(events==null)return;while(events.hasNextEvent()){events.getNextEvent(event);if(event.getEventType()==UsageEvents.Event.ACTIVITY_RESUMED&&event.getTimeStamp()>=lastForegroundEvent){lastForegroundEvent=event.getTimeStamp();foreground=event.getPackageName();}}
+  if(events==null)return;while(events.hasNextEvent()){events.getNextEvent(event);int type=event.getEventType();String key=event.getPackageName()+"/"+event.getClassName();
+   if(type==UsageEvents.Event.ACTIVITY_RESUMED){resumed.put(key,event.getPackageName());if(event.getTimeStamp()>=lastForegroundEvent){lastForegroundEvent=event.getTimeStamp();foreground=event.getPackageName();}}
+   else if(type==UsageEvents.Event.ACTIVITY_PAUSED||type==UsageEvents.Event.ACTIVITY_STOPPED)resumed.remove(key);}
   lastUsageRead=now;
  }
  void updateVisibility(){if(!loaded||destroyed)return;if(!display.allows(this)){displayLost(display);return;}if(closing){if(!screenReady())finishStop();return;}readForeground();boolean show=shouldShow();
