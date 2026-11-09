@@ -2,7 +2,7 @@ plugins { id 'com.android.application' }
 android {
  namespace 'com.oddfactory.renewatheater'
  compileSdk 35
- defaultConfig { applicationId 'com.oddfactory.renewatheater'; minSdk 30; targetSdk 35; versionCode 26; versionName '0.16.10' }
+ defaultConfig { applicationId 'com.oddfactory.renewatheater'; minSdk 30; targetSdk 35; versionCode 27; versionName '0.16.11' }
  compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
  sourceSets.main.assets.setSrcDirs([file('src/main/assets')])
  buildTypes { release { debuggable false; crunchPngs false; minifyEnabled false; shrinkResources false; } }

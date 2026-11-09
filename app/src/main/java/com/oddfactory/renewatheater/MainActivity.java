@@ -53,7 +53,7 @@ public final class MainActivity extends Activity {
   seek.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener(){public void onProgressChanged(SeekBar b,int p,boolean user){size.setText("매표소 크기: "+(p+140));}public void onStartTrackingTouch(SeekBar b){}public void onStopTrackingTouch(SeekBar b){TheaterApps.prefs(MainActivity.this).edit().putInt("size",b.getProgress()+140).apply();reload();}});settings.addView(seek);
   root.addView(button("매표소 끄기",()->{pendingStart=false;main.removeCallbacks(resumeStart);if(TheaterService.live!=null)TheaterService.live.requestStop(true);else stopService(new Intent(this,TheaterService.class));}));
   root.addView(label("한 번 눌러 앱 선택 · 두 번 눌러 종료·설정\n길게 눌러 위치를 옮겨요.",13));
-  root.addView(button("업데이트 확인", appUpdates::checkNow));
+  root.addView(button("업데이트 확인 (현재 " + appUpdates.installedName() + ")", appUpdates::checkNow));
   TheaterUi.apply(root);setContentView(scroll);
  }
  void preparePreview(){

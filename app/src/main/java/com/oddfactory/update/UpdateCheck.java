@@ -97,7 +97,7 @@ public final class UpdateCheck {
             return;
         }
         if (release == null) {
-            if (requested) toast("최신 버전을 사용 중이에요.");
+            if (requested) toast("최신 버전(" + installedName() + ")을 사용 중이에요.");
             return;
         }
         if (Build.VERSION.SDK_INT < release.minSdk) {
@@ -110,7 +110,7 @@ public final class UpdateCheck {
         }
         dialog = new AlertDialog.Builder(activity)
                 .setTitle("새 버전이 있어요")
-                .setMessage(release.versionName + " 버전을 GitHub에서 받을 수 있어요.")
+                .setMessage("현재 " + installedName() + " → 새 버전 " + release.versionName + "\nGitHub에서 받을 수 있어요.")
                 .setPositiveButton("다운로드", (d, w) -> openDownload(release))
                 .setNegativeButton("나중에", null)
                 .create();
@@ -125,6 +125,12 @@ public final class UpdateCheck {
         } catch (ActivityNotFoundException e) {
             toast("다운로드 링크를 열 앱이 없어요.");
         }
+    }
+
+    /** 설치된 앱 버전 이름(설정 화면 표시용). */
+    public String installedName() {
+        try { return activity.getPackageManager().getPackageInfo(activity.getPackageName(), 0).versionName; }
+        catch (Exception e) { return "?"; }
     }
 
     private void toast(String message) {
